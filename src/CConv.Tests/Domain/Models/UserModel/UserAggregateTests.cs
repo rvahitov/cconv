@@ -6,8 +6,10 @@ using CConv.Domain.Models.Common;
 using CConv.Domain.Models.UserModel;
 using CConv.Domain.Models.UserModel.Commands;
 using CConv.Domain.Models.UserModel.Events;
+using CConv.Domain.Models.UserModel.Queries;
 using CConv.Domain.Models.UserModel.ValueObjects;
 using FluentAssertions;
+using FluentAssertions.Execution;
 using Monads;
 using Xunit;
 
@@ -17,7 +19,7 @@ namespace CConv.Tests.Domain.Models.UserModel
     {
         [Theory]
         [AutoData]
-        public void When_New_CreateUser_Should_Success(UserLogin userLogin, UserPassword password)
+        public void When_New_CreateUser_Should_Success( UserLogin userLogin, UserPassword password )
         {
             var userManager   = ActorOf<UserAggregateManager>();
             var eventProbe    = CreateTestProbe();
@@ -34,15 +36,41 @@ namespace CConv.Tests.Domain.Models.UserModel
         [AutoData]
         public void When_NotNew_CreateUser_Should_Fail( UserLogin login, UserPassword password1, UserPassword password2 )
         {
-            
             var userManager    = ActorOf<UserAggregateManager>();
-            var resultProbe     = CreateTestProbe();
+            var resultProbe    = CreateTestProbe();
             var createCommand  = new CreateUser(login, password1);
             var createCommand2 = new CreateUser(login, password2);
             userManager.Tell(createCommand);
             userManager.Tell(createCommand2, resultProbe);
             resultProbe.ExpectMsg<IResult<Nothing, string>>()
                        .IsSuccess().Should().BeFalse();
+        }
+
+        [Theory]
+        [AutoData]
+        public void When_New_GetUserById_Should_Fail( UserLogin login )
+        {
+            var userManager = ActorOf<UserAggregateManager>();
+            var userId      = UserId.ForLogin(login);
+            var query       = new GetUserById(userId);
+            userManager.Tell(query);
+            ExpectMsg<IResult<User, string>>().IsSuccess().Should().BeFalse();
+        }
+
+        [Theory]
+        [AutoData]
+        public void When_NotNew_GetUserById_Should_Success( UserLogin login, UserPassword password )
+        {
+            var userManager   = ActorOf<UserAggregateManager>();
+            var resultProbe   = CreateTestProbe();
+            var createCommand = new CreateUser(login, password);
+            var query         = new GetUserById(UserId.ForLogin(login));
+            userManager.Tell(createCommand);
+            userManager.Tell(query, resultProbe);
+            var user = resultProbe.ExpectMsg<IResult<User, string>>()
+                                  .Fold(u => u, f => throw new AssertionFailedException(f));
+            user.Login.Should().Be(login);
+            user.Password.Should().Be(password);
         }
     }
 }
